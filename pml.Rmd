@@ -1,0 +1,64 @@
+---
+title: "Predicting the Class of activity"
+author: "Prasun Jha"
+date: "13 May 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+The Out of Sample accuracy for the model built to predict the classe variable is **0.993**. K-Fold resampling was used with k=5 in the Random Forest Algorithm used to build the model.
+
+## Cleaning and EDA
+
+The data for training the model was obtained from the following link: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv. This was further subdivided into training and testing data in the ratio 7:3. A lot of the columns contained **NA or missing values** and these were not used in building the model and were also removed from the test data set. The following is the code for cleaning the data:
+```{r,results='hide',warning=FALSE}
+set.seed(133)
+library(caret)
+```
+```{r}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "training.csv")
+training <- read.csv("training.csv")
+inTrain <- createDataPartition(training$classe,p=0.7,list = FALSE)
+train <- training[inTrain,]
+test <- training[-inTrain,]
+a <- vector()
+for (i in 1:160) {a[i] <- sum(is.na(train[,i]))}
+train <- train[,-which(a>0)]
+test <- test[,-which(a>0)]
+#Removing the first few columns like date which should not influence the class of activity performed
+train <- train[,-c(1:7)]
+test <- test[,-c(1:7)]
+##Removing the missing value columns after manual inspection
+train <- train[,-c(5:13,36:41,45:53,67:75)]
+test <- test[,-c(5:13,36:41,45:53,67:75)]
+```
+
+## Building the model
+
+All the remaining columns will be used as predictors to predict the classe of the activity. Random Forest will be used in the train function from the caret package. The resampling method is being changed to K-Fold Resampling with k=5 from the bootstrap so as to improve computing efficiency even though it might have a small effect on accuracy. Also, parallel computing will be required for the computationally intensive task. The below is the code and the accuracy of the training and test samples:
+
+```{r,results='hide',warning=FALSE}
+library(parallel)
+library(doParallel)
+```
+```{r}
+cluster <- makeCluster(detectCores()-1)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",number = 5,allowParallel = TRUE)
+x <- train[,-53]
+y <- train[,53]
+fit <- train(x,y, method="rf",trControl = fitControl)
+stopCluster(cluster)
+registerDoSEQ()
+confusionMatrix.train(fit)
+confusionMatrix(test$classe,predict(fit,test))
+```
+
+As can be seen from the above outputs, the out of sample accuracy is 0.993 with high specificity and sensitivity values as well which confirm the validity of our model 
+
+
